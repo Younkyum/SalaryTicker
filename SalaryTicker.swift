@@ -282,45 +282,89 @@ struct PanelView: View {
     var body: some View {
         let s = live.value
         let cur = ticker.config.currency
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("지난 급여일 이후 \(s.phase.icon) \(s.phase.text)")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text(money(s.accumulated, cur))
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                ProgressView(value: min(s.periodProgress, 1))
-                Text("\(ticker.config.payType.payName)의 \(Int(min(s.periodProgress, 1) * 100))% 벌었어요 · 급여일까지 D-\(s.daysUntilPayday)")
-                    .font(.caption2).foregroundStyle(.secondary)
+        let progress = min(max(s.periodProgress, 0), 1)
+        VStack(alignment: .leading, spacing: 14) {
+            // 헤더
+            HStack {
+                Text("지난 급여일 이후").font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                Text("\(s.phase.icon) \(s.phase.text)")
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(.quaternary, in: Capsule())
             }
 
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
-                row("오늘 번 돈", money(s.today, cur))
-                row("오늘 근무", "\(Int(min(s.todayProgress, 1) * 100))%")
-                row("시급", money(s.perHour, cur))
-                row("초당", Currency.of(cur).symbol + String(format: "%.\(Currency.of(cur).decimals + 2)f", s.perSecond))
-                row("이번 급여 기간 근무일", "\(s.workdaysInPeriod)일")
-                row("다음 급여일", s.nextPayday.formatted(.dateTime.month().day().weekday(.abbreviated)))
+            // 누적 금액
+            VStack(alignment: .leading, spacing: 8) {
+                Text(money(s.accumulated, cur))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                GeometryReader { g in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.quaternary)
+                        Capsule().fill(Color.accentColor.gradient)
+                            .frame(width: max(g.size.width * progress, progress > 0 ? 6 : 0))
+                    }
+                }
+                .frame(height: 6)
+                HStack {
+                    Text("\(ticker.config.payType.payName)의 \(Int(progress * 100))%")
+                    Spacer()
+                    Text(s.daysUntilPayday == 0 ? "오늘 급여일 🎉" : "급여일까지 D-\(s.daysUntilPayday)")
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
-            .font(.callout)
+
+            // 통계 카드
+            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                GridRow {
+                    card("오늘 번 돈", money(s.today, cur), sub: "근무 \(Int(min(s.todayProgress, 1) * 100))%")
+                    card("시급", money(s.perHour, cur), sub: "초당 " + perSecondText(s.perSecond, cur))
+                }
+                GridRow {
+                    card("다음 급여일", s.nextPayday.formatted(.dateTime.month().day()),
+                         sub: s.nextPayday.formatted(.dateTime.weekday(.wide)))
+                    card("급여 기간 근무일", "\(s.workdaysInPeriod)일", sub: ticker.config.payType.label + " 기준")
+                }
+            }
 
             Divider()
 
-            HStack {
-                Button("설정…", action: openSettings)
-                Spacer()
-                Button("종료") { NSApp.terminate(nil) }
+            HStack(spacing: 8) {
+                Button(action: openSettings) {
+                    Label("설정", systemImage: "gearshape").frame(maxWidth: .infinity)
+                }
+                Button { NSApp.terminate(nil) } label: {
+                    Label("종료", systemImage: "power").frame(maxWidth: .infinity)
+                }
             }
+            .controlSize(.large)
         }
         .padding(16)
-        .frame(width: 290)
+        .frame(width: 320)
     }
 
-    private func row(_ k: String, _ v: String) -> some View {
-        GridRow {
-            Text(k).foregroundStyle(.secondary)
-            Text(v).monospacedDigit().gridColumnAlignment(.trailing)
+    private func card(_ title: String, _ value: String, sub: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(sub).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(.quinary, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func perSecondText(_ v: Double, _ code: String) -> String {
+        let c = Currency.of(code)
+        return c.symbol + String(format: "%.\(c.decimals + 2)f", v)
     }
 }
 
