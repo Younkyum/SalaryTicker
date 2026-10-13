@@ -23,12 +23,9 @@ Mac 메뉴막대에서 **지난 급여일부터 지금까지 번 돈**이 1초�
 
 1. [Releases](../../releases/latest)에서 `SalaryTicker.zip`을 받아 압축을 풀어요.
 2. `월급티커.app`을 **응용 프로그램** 폴더로 옮겨요.
-3. 처음 열 때 Apple 공증을 받지 않은 앱이라 macOS가 막아요. 아래 둘 중 하나로 열면 돼요.
-   - **시스템 설정 → 개인정보 보호 및 보안**으로 가서 맨 아래 "월급티커"의 **그래도 열기**를 눌러요.
-   - 또는 터미널에서:
-     ```bash
-     xattr -dr com.apple.quarantine /Applications/월급티커.app
-     ```
+3. 열면 메뉴막대에 금액이 나타나요. 처음 실행하면 설정 창이 떠요.
+
+Apple 공증을 받은 앱이라 경고 없이 바로 열려요.
 
 macOS 14 (Sonoma) 이상, Apple Silicon · Intel 모두 지원해요.
 
