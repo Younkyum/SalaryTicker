@@ -6,7 +6,7 @@
 #   NOTARY_PROFILE(기본 salaryticker-notary, `xcrun notarytool store-credentials`로 저장)
 set -e
 cd "$(dirname "$0")"
-VERSION="1.0.0"
+VERSION="1.1.0"
 APP="build/월급티커.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"

@@ -25,7 +25,7 @@ struct Config: Equatable {
         lunchEnabled: true, lunchStart: 12 * 60, lunchEnd: 13 * 60,
         workdays: [2, 3, 4, 5, 6],
         currency: "KRW",
-        iconMode: .phase, customIcon: "💰"
+        iconMode: .phase, customIcon: "banknote"
     )
 
     static func load() -> Config {
@@ -45,7 +45,7 @@ struct Config: Equatable {
             workdays: Set((d.array(forKey: "workdays") as? [Int]) ?? [2, 3, 4, 5, 6]),
             currency: d.string(forKey: "currency") ?? "KRW",
             iconMode: IconMode(rawValue: d.integer(forKey: "iconMode")) ?? .phase,
-            customIcon: d.string(forKey: "customIcon") ?? "💰"
+            customIcon: iconSymbols.contains(d.string(forKey: "customIcon") ?? "") ? d.string(forKey: "customIcon")! : "banknote"
         )
     }
 
@@ -184,11 +184,24 @@ enum IconMode: Int, CaseIterable {
     case phase = 0, custom = 1, none = 2
     var label: String {
         switch self {
-        case .phase: "상태별 자동 (💸🍚☕️🏠🌴)"
+        case .phase: "상태별 자동"
         case .custom: "직접 고르기"
         case .none: "아이콘 없음"
         }
     }
+}
+
+/// 메뉴막대에 쓸 수 있는 SF Symbols — 컬러 이모지는 메뉴막대에서 단색으로 뭉개진다
+let iconSymbols = [
+    "banknote", "wonsign.circle", "dollarsign.circle", "eurosign.circle", "yensign.circle",
+    "creditcard", "chart.line.uptrend.xyaxis", "clock", "flame", "sparkles",
+]
+
+func symbolImage(_ name: String) -> NSImage? {
+    let img = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+        .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))
+    img?.isTemplate = true
+    return img
 }
 
 struct Currency: Hashable {
@@ -227,13 +240,13 @@ func money(_ v: Double, _ code: String) -> String {
 }
 
 extension Phase {
-    var icon: String {
+    var symbol: String {
         switch self {
-        case .working: "💸"
-        case .lunch: "🍚"
-        case .beforeWork: "☕️"
-        case .afterWork: "🏠"
-        case .dayOff: "🌴"
+        case .working: "banknote"
+        case .lunch: "fork.knife"
+        case .beforeWork: "cup.and.saucer"
+        case .afterWork: "house"
+        case .dayOff: "beach.umbrella"
         }
     }
     var text: String {
@@ -288,7 +301,7 @@ struct PanelView: View {
             HStack {
                 Text("지난 급여일 이후").font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
-                Text("\(s.phase.icon) \(s.phase.text)")
+                Label(s.phase.text, systemImage: s.phase.symbol)
                     .font(.caption.weight(.medium))
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(.quaternary, in: Capsule())
@@ -389,14 +402,12 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     private let dayNames = ["일", "월", "화", "수", "목", "금", "토"]
 
-    private var previewTitle: String {
-        let c = ticker.config
-        let icon: String = switch c.iconMode {
-        case .phase: "💸 "
-        case .custom: c.customIcon.isEmpty ? "" : c.customIcon + " "
-        case .none: ""
+    private var previewSymbol: String? {
+        switch ticker.config.iconMode {
+        case .phase: compute(ticker.config).phase.symbol
+        case .custom: ticker.config.customIcon
+        case .none: nil
         }
-        return icon + money(compute(c).accumulated, c.currency)
     }
 
     var body: some View {
@@ -447,11 +458,18 @@ struct SettingsView: View {
                     HStack(spacing: 4) {
                         ForEach(1...7, id: \.self) { wd in
                             let on = ticker.config.workdays.contains(wd)
-                            Toggle(dayNames[wd - 1], isOn: Binding(
-                                get: { on },
-                                set: { if $0 { ticker.config.workdays.insert(wd) } else { ticker.config.workdays.remove(wd) } }
-                            ))
-                            .toggleStyle(.button)
+                            Button {
+                                if on { ticker.config.workdays.remove(wd) } else { ticker.config.workdays.insert(wd) }
+                            } label: {
+                                Text(dayNames[wd - 1])
+                                    .font(.callout.weight(on ? .semibold : .regular))
+                                    .foregroundStyle(on ? Color.white : Color.secondary)
+                                    .frame(width: 28, height: 24)
+                                    .background(on ? Color.accentColor : Color.primary.opacity(0.06),
+                                                in: RoundedRectangle(cornerRadius: 6))
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -460,22 +478,38 @@ struct SettingsView: View {
                 Picker("아이콘", selection: $ticker.config.iconMode) {
                     ForEach(IconMode.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
-                if ticker.config.iconMode == .custom {
-                    LabeledContent("아이콘 고르기") {
-                        HStack(spacing: 2) {
-                            ForEach(["💰", "💵", "🤑", "💎", "🪙", "📈", "🔥", "⏳"], id: \.self) { e in
-                                Button(e) { ticker.config.customIcon = e }
-                                    .buttonStyle(.borderless)
-                                    .padding(3)
-                                    .background(ticker.config.customIcon == e ? Color.accentColor.opacity(0.25) : .clear,
-                                                in: RoundedRectangle(cornerRadius: 5))
+                if ticker.config.iconMode == .phase {
+                    LabeledContent("상태") {
+                        HStack(spacing: 10) {
+                            ForEach([Phase.working, .lunch, .beforeWork, .afterWork, .dayOff], id: \.self) { p in
+                                Image(systemName: p.symbol).help(p.text)
                             }
                         }
+                        .foregroundStyle(.secondary)
                     }
-                    TextField("직접 입력 (이모지·글자)", text: $ticker.config.customIcon)
+                }
+                if ticker.config.iconMode == .custom {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 6) {
+                        ForEach(iconSymbols, id: \.self) { name in
+                            let on = ticker.config.customIcon == name
+                            Button { ticker.config.customIcon = name } label: {
+                                Image(systemName: name)
+                                    .font(.system(size: 15))
+                                    .frame(maxWidth: .infinity, minHeight: 30)
+                                    .background(on ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.05),
+                                                in: RoundedRectangle(cornerRadius: 7))
+                                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(on ? Color.accentColor : .clear, lineWidth: 1.5))
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
                 LabeledContent("미리보기") {
-                    Text(previewTitle).monospacedDigit()
+                    HStack(spacing: 4) {
+                        if let sym = previewSymbol { Image(systemName: sym) }
+                        Text(money(compute(ticker.config).accumulated, ticker.config.currency)).monospacedDigit()
+                    }
                 }
             }
             Section {
@@ -516,16 +550,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.contentViewController = NSHostingController(
             rootView: PanelView(ticker: ticker, live: ticker.live) { [weak self] in self?.openSettings() })
 
-        var lastTitle = ""
+        statusItem.button?.imagePosition = .imageLeading
+        var lastTitle = "", lastSymbol: String?? = .none
         ticker.onTick = { [weak self] s in
-            guard let c = self?.ticker.config else { return }
-            let icon: String = switch c.iconMode {
-            case .phase: s.phase.icon + " "
-            case .custom: c.customIcon.isEmpty ? "" : c.customIcon + " "
-            case .none: ""
+            guard let self, let button = self.statusItem.button else { return }
+            let c = self.ticker.config
+            let sym: String? = switch c.iconMode {
+            case .phase: s.phase.symbol
+            case .custom: c.customIcon
+            case .none: nil
             }
-            let title = icon + money(s.accumulated, c.currency)
-            if title != lastTitle { self?.statusItem.button?.title = title; lastTitle = title }
+            if lastSymbol != .some(sym) { button.image = sym.flatMap(symbolImage); lastSymbol = .some(sym) }
+            let title = (sym == nil ? "" : " ") + money(s.accumulated, c.currency)
+            if title != lastTitle { button.title = title; lastTitle = title }
         }
         ticker.refresh()
 
